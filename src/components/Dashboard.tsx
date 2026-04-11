@@ -3,8 +3,9 @@ import {
   LayoutDashboard, CheckSquare, Users2, Lightbulb, Settings, MapPin, TrendingUp, TrendingDown,
   Sun, Cloud, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, RefreshCw, Minus, X,
   Sparkles, Calendar, ChevronDown, ChevronRight, Megaphone, Target, Video, Briefcase, Plus, Trash2, Edit2,
-  Star, Award, Zap, AlertCircle, Building2
+  Star, Award, Zap, AlertCircle, Building2, Code2
 } from 'lucide-react';
+import { WebsiteBeta } from './WebsiteBeta';
 
 // WMO weather codes → icon + label
 const getWeatherInfo = (code: number) => {
@@ -274,6 +275,7 @@ const navItemsDef = [
     ]
   },
   { label: 'Competitors', icon: Users2, badge: 'BETA' },
+  { label: 'Website Beta', icon: Code2, badge: 'BETA' },
 ];
 
 interface NewsArticle {
@@ -2524,6 +2526,12 @@ export const Dashboard = ({
             })()}
 
           </div>
+        ) : activeTab === 'Website Beta' ? (
+          <WebsiteBeta 
+            businessName={businessName} 
+            businessType={businessType}
+            address={address}
+          />
         ) : (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">

@@ -8,7 +8,7 @@ interface Message {
   timestamp: number;
 }
 
-const GEMINI_API_KEY = 'AIzaSyD1qFCfYlppdFYwP2w6afx7nEfOl4yZhGA';
+const GEMINI_API_KEY = 'AIzaSyANeLuWmuwQPAYLnI-ku0lfkGzoxvDC5UI';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 const SYSTEM_PROMPT = `You are an expert website builder assistant. Your ONLY purpose is to help users create and build websites for their business.

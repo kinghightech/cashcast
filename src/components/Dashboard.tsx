@@ -3,7 +3,7 @@ import {
   LayoutDashboard, CheckSquare, Users2, Lightbulb, Settings, MapPin, TrendingUp, TrendingDown,
   Sun, Cloud, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, RefreshCw, Minus, X,
   Sparkles, Calendar, ChevronDown, ChevronRight, Megaphone, Target, Video, Briefcase, Plus, Trash2, Edit2,
-  Star, Award, Zap, AlertCircle, Building2, Code2
+  Star, Award, Zap, AlertCircle, Building2
 } from 'lucide-react';
 import { WebsiteBeta } from './WebsiteBeta';
 
@@ -275,7 +275,7 @@ const navItemsDef = [
     ]
   },
   { label: 'Competitors', icon: Users2, badge: 'BETA' },
-  { label: 'Website Beta', icon: Code2, badge: 'BETA' },
+  { label: 'Website Beta', icon: Building2, badge: 'NEW' },
 ];
 
 interface NewsArticle {
@@ -1139,7 +1139,7 @@ export const Dashboard = ({
 
   // Average week outlook
   const weekAvg = weatherData.length > 0
-    ? Math.round(weatherData.reduce((sum, d) => sum + generateAIForecast(d).rawTotal, 0) / weatherData.length)
+    ? Math.round(weatherData.reduce((sum, d) => sum + parseInt(generateAIForecast(d).pct), 0) / weatherData.length)
     : 0;
 
   // Today's data
@@ -2528,7 +2528,7 @@ export const Dashboard = ({
           </div>
         ) : activeTab === 'Website Beta' ? (
           <WebsiteBeta 
-            businessName={businessName} 
+            businessName={businessName}
             businessType={businessType}
             address={address}
           />

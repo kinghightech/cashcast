@@ -1,8 +1,9 @@
 node_modules/
 dist/
-.vite/
 cashcast/node_modules/
 cashcast/dist/
 cashcast/.git_backup_nested/
 public/onboardingbackground.mp4
 public/repeatbackground.mp4
+.env
+.env.local

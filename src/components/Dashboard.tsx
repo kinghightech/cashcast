@@ -1139,7 +1139,7 @@ export const Dashboard = ({
 
   // Average week outlook
   const weekAvg = weatherData.length > 0
-    ? Math.round(weatherData.reduce((sum, d) => sum + parseInt(generateAIForecast(d).pct), 0) / weatherData.length)
+    ? Math.round(weatherData.reduce((sum, d) => sum + generateAIForecast(d).rawTotal, 0) / weatherData.length)
     : 0;
 
   // Today's data

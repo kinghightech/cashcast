@@ -1,0 +1,106 @@
+@import "@fontsource/geist-sans/400.css";
+@import "@fontsource/geist-sans/500.css";
+@import "@fontsource/geist-sans/600.css";
+@import "@fontsource/geist-sans/700.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 260 87% 3%;
+    --foreground: 40 6% 95%;
+    --primary: 121 95% 76%;
+    --primary-foreground: 0 0% 5%;
+    --muted: 240 4% 16%;
+    --border: 240 4% 20%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased overflow-x-hidden;
+  }
+}
+
+@layer utilities {
+  .liquid-glass {
+    position: relative;
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+  }
+}
+
+.zooming-active {
+  transform-origin: 15% 15%;
+  will-change: transform, filter;
+  animation: zoomIntoSpace 3s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+  pointer-events: none;
+}
+
+@keyframes zoomIntoSpace {
+  0% {
+    transform: scale(1) translateZ(0);
+    filter: brightness(1);
+  }
+
+  60% {
+    filter: brightness(0.6);
+  }
+
+  100% {
+    transform: scale(30) translateZ(0);
+    filter: brightness(0);
+  }
+}
+
+/* Google Places Autocomplete dark theme */
+.pac-container {
+  z-index: 10000 !important;
+  background-color: rgba(20, 20, 20, 0.95) !important;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  margin-top: 6px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6) !important;
+  font-family: 'Geist Sans', sans-serif !important;
+  padding: 4px 0 !important;
+}
+
+.pac-item {
+  padding: 10px 16px !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+  cursor: pointer !important;
+  font-size: 14px !important;
+  transition: background 0.2s ease;
+}
+
+.pac-item:first-child {
+  border-top: none !important;
+}
+
+.pac-item:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.pac-item-query {
+  color: white !important;
+  font-weight: 500 !important;
+}
+
+.pac-matched {
+  color: rgba(16, 185, 129, 0.9) !important;
+  font-weight: 600 !important;
+}
+
+.pac-icon {
+  filter: invert(1) brightness(0.7) !important;
+}
+
+.pac-item-selected, .pac-item-selected:hover {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+}

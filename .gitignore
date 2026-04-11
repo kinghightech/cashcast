@@ -1,0 +1,7 @@
+node_modules/
+dist/
+cashcast/node_modules/
+cashcast/dist/
+cashcast/.git_backup_nested/
+public/onboardingbackground.mp4
+public/repeatbackground.mp4

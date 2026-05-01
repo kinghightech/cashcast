@@ -8,9 +8,9 @@ This repo contains three independent projects sharing one git root:
 
 | Directory | Purpose |
 |---|---|
-| `/` (root) | React landing page + 6-step onboarding + business analytics dashboard + Gemini website-generator feature |
+| `/` (root) | React landing page + 7-step onboarding + business analytics dashboard + Gemini website-generator + **Kastly forecasting engine** (Monte Carlo revenue prediction with weekly correction loop) |
 | `cashcast/` | Reddit Devvit app (embedded posts) + a separate React demo/prototype UI |
-| `cashcast/server/` | Real forecast API server (Express, port 8787) |
+| `cashcast/server/` | Older standalone forecast API server (Express, port 8787) — superseded by the engine in the root project, kept for reference |
 
 Each project has its own `package.json`. Run `npm install` inside each before working on it.
 
@@ -30,13 +30,12 @@ npm run preview        # Preview production build
 ### Environment
 Create `.env.local` in the root:
 ```
-GEMINI_API_KEY=<your key>
-# or
-VITE_GEMINI_API_KEY=<your key>
+GEMINI_API_KEY=<your key>          # Required — Gemini website generator
+TICKETMASTER_API_KEY=<your key>    # Required — nearby event signal in the engine; without it event multiplier defaults to 1.0
 ```
-The backend (`backend.ts`) reads both. The Vite frontend never has access to the key.
+`backend.ts` loads both `.env` and `.env.local` via `dotenv`. The Vite frontend never has access to either key — they only land in the Express process.
 
-Vite proxy: all `/api` requests from the frontend are proxied to `http://localhost:5001`.
+Vite proxy: all `/api` requests from the frontend are proxied to `http://localhost:5001` (`vite.config.ts`).
 
 ### Application Flow
 
@@ -44,15 +43,19 @@ Vite proxy: all `/api` requests from the frontend are proxied to `http://localho
 App.tsx
   └─ Hero          ← landing page
        │  (zoom animation triggers on "Start Free")
-       └─ Onboarding   ← 6-step form (TOTAL_STEPS = 6)
+       └─ Onboarding   ← 7-step form (TOTAL_STEPS = 7)
               Step 1: business type selection (10 types)
               Step 2: address via Google Places Autocomplete
               Step 3: daily revenue + profit margin (or use industry averages)
               Step 4: business model (walk-in / mixed / appointment / online)
               Step 5: optional peak traffic time + customer source
               Step 6: promotion style + business name
+              Step 7: last week's daily actuals (calibration) — POST /api/onboarding/calibrate
               │  (on finish: fetchWeather + fetchAnchors run concurrently)
               └─ Dashboard   ← main analytics view
+                    ├─ "📈 Calibrated · N days (avg X.XX)" pill in top bar (if calibrated)
+                    ├─ WeeklyCheckin Monday banner (if last week has no corrections)
+                    ├─ Week Outlook card + 7-day forecast chart — driven by /api/forecast/week
                     ├─ 7-day weather forecast (Open-Meteo API, free)
                     ├─ Traffic anchors (nearby schools, transit, etc. via Google Places + DistanceMatrix)
                     ├─ Competitor analysis (Google Places nearbySearch)
@@ -62,11 +65,49 @@ App.tsx
 
 Google Maps JS SDK must be loaded in `index.html` (check the script tag for the API key). The `window.google` global is used directly in `Onboarding.tsx` and `Dashboard.tsx`.
 
+### Kastly Forecasting Engine (`engine/`, `integrations/`, `store/`)
+
+Pure-TS Monte Carlo engine that takes baseline revenue + signals and returns a single mean revenue prediction with plain-English reasons.
+
+**Multiplier stack** (`engine/forecast.ts`) — five layers, each sampled in parallel through a 1000-trial Monte Carlo with Box-Muller normal noise (Mulberry32 PRNG, optional seed):
+1. **Weather** — snow 0.60 · heavy rain (>10mm) 0.75 · light rain (1–10mm) 0.88 · extreme heat (90°F+) 0.85 · cloudy 0.93 · clear/sunny 1.10
+2. **Day of week** — Mon 0.80 · Tue 0.85 · Wed 0.90 · Thu 0.95 · Fri 1.20 · Sat 1.30 · Sun 1.10
+3. **Event** (strongest match wins) — major ≤0.5 mi 1.40 · major ≤2 mi 1.20 · minor ≤0.5 mi 1.15 · else 1.00
+4. **School** (only if `schoolDependent`) — holiday/weekend 0.70 · active school day 1.15 · else 1.00
+5. **Correction** — recency-weighted average of the last 3 stored ratios (`[0.2, 0.3, 0.5]` for newest), clamped to `[0.5, 1.5]`
+
+Per-multiplier σ in Monte Carlo: weather 0.10, day 0.05, event 0.15, school 0.05, correction 0.03.
+
+Reasons layer emits a templated bullet for each multiplier that deviates from 1.00 by more than 5% (e.g. `🌧️ Heavy rain forecasted — foot traffic expected to drop 25%`).
+
+**Integrations** (`integrations/`):
+- `weather.ts` — Open-Meteo forecast API (forward) + archive API (historical for retroactive calibration). Maps WMO codes → engine condition strings.
+- `events.ts` — Ticketmaster Discovery API. Returns engine-shaped `EventInput[]` with distance + size (`major` for sports/music/arts segment, else `minor`). No-op (returns `[]`) if `TICKETMASTER_API_KEY` is missing.
+- `geocode.ts` — Nominatim (used by the engine for free-form address → lat/lon if needed; the React app already has lat/lng from Google Places).
+
+**Correction store** (`store/corrections.ts`) — JSON file at `store/data/corrections.json` (gitignored), keyed by `${slugifiedBusinessType}-${lat3},${lng3}`. One row per (businessId, weekDate). The recency-weighted reduction lives in the engine module so the store stays a dumb persistence layer.
+
 ### Backend (`backend.ts`)
 - Express on port 5001
 - `POST /api/generate-website` — validates input, calls Gemini, returns raw HTML
-- `GET /api/models` — lists available Gemini models for the configured key
+- `GET /api/models` — lists available Gemini models for the configured key (gated behind `ENABLE_DEBUG_MODELS=true`)
 - Gemini model selection: tries a ranked preference list (`gemini-3.1-pro-preview` first, falls back through flash variants), caches the first successful model name in `cachedModelName`
+
+**Kastly engine endpoints:**
+- `POST /api/forecast/predict` — single-day prediction. Body: `{ businessType, lat, lng, baselineRevenue, schoolDependent?, forecastDate (YYYY-MM-DD), isSchoolHoliday? }`. Returns `{ predicted_revenue, reasons[], calibrated, correctionsUsed, businessId, weatherUsed, eventsUsed }`.
+- `POST /api/forecast/week` — batched 7-day forecast (parallel internal `predict` calls). Same body + optional `startDate` and `days` (default 7). Drives the dashboard's Week Outlook + chart.
+- `POST /api/onboarding/calibrate` — accepts last week's actuals `[{ date, revenue }, ...]`, fetches historical weather per day, runs the engine retroactively without a correction multiplier, computes `actual / predicted` ratio, persists each row.
+- `GET /api/correction/needs-prompt?businessType=X&lat=Y&lng=Z` — returns `{ needsPrompt, lastWeekDates[], correctionsForLastWeek[], totalCorrections }`. `WeeklyCheckin` fetches this on dashboard mount and only renders when `needsPrompt` is `true`.
+
+Dashboard fetches `/api/forecast/week` on mount and re-fetches whenever `calibrationVersion` bumps (after a successful Monday submission). Engine output drives `weekAvg` and the SVG line chart; the heuristic `generateAIForecast` remains as a fallback if the engine call fails.
+
+**Verifying engine math:**
+```bash
+npx tsx engine/scenarios.ts    # Re-runs the 3 spec scenarios with seeded RNG and prints the multiplier breakdown for each
+```
+The three canonical scenarios produce raw stack products of 0.704× / 2.07× / 0.462× the baseline. Monte Carlo means should land within ~0.5% of those.
+
+**Heuristic shared across Onboarding + Dashboard:** `SCHOOL_DEPENDENT_BUSINESSES` is duplicated in `src/components/Onboarding.tsx` and `src/components/Dashboard.tsx`. Keep them in sync — both are passed to the engine as the `schoolDependent` flag. Eventually consolidate into a shared module.
 
 ### Styling Conventions
 - **Theme:** Dark, deep purple-black (`--background: 260 87% 3%`). All CSS variables are HSL defined in `src/index.css`.

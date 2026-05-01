@@ -25,7 +25,42 @@ const getDistanceFromLatLonInMiles = (lat1: number, lon1: number, lat2: number, 
   return R * c; 
 };
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
+
+const dailyDayLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+function lastFullWeekDates(reference: Date): { date: string; label: string }[] {
+  const day = reference.getDay();
+  const daysToLastSunday = day === 0 ? 7 : day;
+  const lastSunday = new Date(reference);
+  lastSunday.setDate(reference.getDate() - daysToLastSunday);
+  const lastMonday = new Date(lastSunday);
+  lastMonday.setDate(lastSunday.getDate() - 6);
+  const dates: { date: string; label: string }[] = [];
+  for (let i = 0; i < 7; i += 1) {
+    const d = new Date(lastMonday);
+    d.setDate(lastMonday.getDate() + i);
+    const iso = d.toISOString().slice(0, 10);
+    const monthDay = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    dates.push({ date: iso, label: `${dailyDayLabels[i]}, ${monthDay}` });
+  }
+  return dates;
+}
+
+const SCHOOL_DEPENDENT_BUSINESSES = new Set([
+  'Restaurant', 'Café', 'Bakery', 'Convenience Store', 'Specialty Retail', 'Fitness Studio',
+]);
+
+export type OnboardingCalibration = {
+  baselineRevenue: number;
+  schoolDependent: boolean;
+  calibrated: boolean;
+  correctionsCount: number;
+  averageRatio: number;
+  message: string;
+  storedDays: number;
+  skipped: boolean;
+};
 
 const businesses = [
   { label: 'Restaurant', icon: UtensilsCrossed },
@@ -131,6 +166,13 @@ export const Onboarding = () => {
   // Step 6
   const [promotionStyle, setPromotionStyle] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState('');
+
+  // Step 7 — last-week calibration
+  const lastWeek = useRef(lastFullWeekDates(new Date())).current;
+  const [weekActuals, setWeekActuals] = useState<string[]>(() => Array(7).fill(''));
+  const [calibrationSubmitting, setCalibrationSubmitting] = useState(false);
+  const [calibrationError, setCalibrationError] = useState('');
+  const [calibration, setCalibration] = useState<OnboardingCalibration | null>(null);
 
   // Weather (fetched on complete)
   const [weatherData, setWeatherData] = useState<WeatherDay[]>([]);
@@ -354,6 +396,89 @@ export const Onboarding = () => {
     await Promise.all([fetchWeather(), fetchAnchors()]);
   };
 
+  const parseMoney = (text: string): number | null => {
+    const cleaned = text.replace(/[^\d.]/g, '');
+    if (!cleaned) return null;
+    const n = Number.parseFloat(cleaned);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+
+  const submitCalibration = async (skipActuals: boolean): Promise<void> => {
+    setCalibrationError('');
+    const baselineRevenue = parseMoney(revenue);
+    if (!baselineRevenue) {
+      setCalibrationError('We need your average daily revenue from step 3 first.');
+      return;
+    }
+    if (!latLng) {
+      setCalibrationError('Address coordinates missing — go back and pick your address.');
+      return;
+    }
+
+    const schoolDependent = SCHOOL_DEPENDENT_BUSINESSES.has(selectedBusiness ?? '');
+    const filledActuals = lastWeek.map((d, i) => ({
+      date: d.date,
+      revenue: parseMoney(weekActuals[i]),
+    }));
+    const filledCount = filledActuals.filter((a) => a.revenue !== null).length;
+
+    setCalibrationSubmitting(true);
+    try {
+      let result: OnboardingCalibration = {
+        baselineRevenue,
+        schoolDependent,
+        calibrated: false,
+        correctionsCount: 0,
+        averageRatio: 1,
+        message: 'Skipped — running on baseline.',
+        storedDays: 0,
+        skipped: true,
+      };
+
+      if (!skipActuals && filledCount > 0) {
+        const response = await fetch('/api/onboarding/calibrate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessType: selectedBusiness,
+            lat: latLng.lat,
+            lng: latLng.lng,
+            baselineRevenue,
+            schoolDependent,
+            actuals: filledActuals,
+          }),
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.error || `Calibration failed (${response.status})`);
+        }
+        const data = await response.json() as {
+          correctionsCount: number;
+          averageRatio: number;
+          message: string;
+          stored: unknown[];
+        };
+        result = {
+          baselineRevenue,
+          schoolDependent,
+          calibrated: data.correctionsCount > 0,
+          correctionsCount: data.correctionsCount,
+          averageRatio: data.averageRatio,
+          message: data.message,
+          storedDays: data.stored.length,
+          skipped: false,
+        };
+      }
+
+      setCalibration(result);
+      await completeSetup();
+    } catch (err: any) {
+      setCalibrationError(err?.message || 'Something went wrong calibrating.');
+    } finally {
+      setCalibrationSubmitting(false);
+    }
+  };
+
   // Post-onboarding states
   const [thankYouText, setThankYouText] = useState('');
   const [thankYouDone, setThankYouDone] = useState(false);
@@ -515,6 +640,7 @@ export const Onboarding = () => {
               customerSource={customerSource}
               anchors={anchors}
               anchorScore={anchorScore}
+              calibration={calibration}
             />
         </div>
       )}
@@ -837,10 +963,85 @@ export const Onboarding = () => {
           </div>
           {navButtons(
             () => setStep(5),
-            () => { if (promotionStyle) { completeSetup(); } },
+            () => { if (promotionStyle) { setStep(7); } },
             !!promotionStyle,
-            'Finish'
+            'Continue'
           )}
+        </div>
+      )}
+
+      {/* ===== STEP 7: Last week's actuals (calibration) ===== */}
+      {step === 7 && (
+        <div className="relative z-10 w-[94%] max-w-5xl rounded-3xl px-12 py-14 sm:px-16 sm:py-16 opacity-0 animate-fade-in-up" style={glassStyle}>
+          {stepIndicator(7)}
+          <h2 className="text-2xl sm:text-3xl font-semibold text-white mb-3 font-geist italic">
+            Help Kastly learn your business
+          </h2>
+          <p className="text-white/50 text-base mb-8 font-geist">
+            Tell us what you actually made each day last week. Kastly uses this to calibrate its
+            predictions to <span className="text-white/80 italic">your</span> business specifically.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+            {lastWeek.map((day, i) => (
+              <div key={day.date} className="flex flex-col gap-1.5">
+                <label className="text-white/60 text-sm font-geist">{day.label}</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={weekActuals[i]}
+                    placeholder="—"
+                    onChange={(e) => {
+                      const cleaned = e.target.value.replace(/[^\d.]/g, '');
+                      const next = weekActuals.slice();
+                      next[i] = cleaned;
+                      setWeekActuals(next);
+                    }}
+                    className="w-full pl-11 pr-4 py-3 rounded-xl text-base text-white placeholder-white/30 font-geist outline-none transition-all duration-300 focus:border-white/30"
+                    style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-white/40 text-xs font-geist mb-2">
+            Skip any day you were closed. Kastly compares each day to what we would&apos;ve predicted for that exact date — that&apos;s how the model learns your local rhythm.
+          </p>
+
+          {calibrationError && (
+            <p className="text-red-400/80 text-sm font-geist mb-3">{calibrationError}</p>
+          )}
+
+          <div className="flex justify-between items-center mt-8">
+            <button
+              onClick={() => setStep(6)}
+              disabled={calibrationSubmitting}
+              className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold font-geist transition-all duration-300 bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 hover:text-white hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
+            >
+              <span className="text-xs">‹</span> Back
+            </button>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => submitCalibration(true)}
+                disabled={calibrationSubmitting}
+                className="text-white/40 text-sm font-geist underline underline-offset-4 hover:text-white/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Skip for now
+              </button>
+              <button
+                onClick={() => submitCalibration(false)}
+                disabled={calibrationSubmitting}
+                className="flex items-center gap-2 px-7 py-3.5 rounded-xl text-base font-semibold font-geist transition-all duration-300 bg-white/15 text-white border border-white/20 hover:bg-white/25 hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
+              >
+                {calibrationSubmitting ? 'Calibrating…' : 'Lock in calibration'} <span className="text-xs">›</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
       </div>

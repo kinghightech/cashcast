@@ -7,3 +7,6 @@ public/onboardingbackground.mp4
 public/repeatbackground.mp4
 .env
 .env.local
+
+# Runtime data — per-user correction history, not source
+store/data/

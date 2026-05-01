@@ -6,6 +6,22 @@ import {
   Star, Award, Zap, AlertCircle, Building2
 } from 'lucide-react';
 import { WebsiteBeta } from './WebsiteBeta';
+import { WeeklyCheckin } from './WeeklyCheckin';
+
+const SCHOOL_DEPENDENT_BUSINESSES = new Set([
+  'Restaurant', 'Café', 'Bakery', 'Convenience Store', 'Specialty Retail', 'Fitness Studio',
+]);
+
+export type DashboardCalibration = {
+  baselineRevenue: number;
+  schoolDependent: boolean;
+  calibrated: boolean;
+  correctionsCount: number;
+  averageRatio: number;
+  message: string;
+  storedDays: number;
+  skipped: boolean;
+};
 
 // WMO weather codes → icon + label
 const getWeatherInfo = (code: number) => {
@@ -81,6 +97,7 @@ interface DashboardProps {
   businessName?: string;
   anchors: TrafficAnchor[];
   anchorScore: number;
+  calibration?: DashboardCalibration | null;
 }
 
 // ===== COMPETITORS SECTION HELPERS =====
@@ -432,8 +449,72 @@ const getTrendsForBusiness = (type: string) => {
 export const Dashboard = ({
   address, userLatLng, businessType, revenue, profitMargin, businessModel,
   mixedModels, weatherData, weatherLoading, exposure, peakTraffic, customerSource, businessName,
-  anchors, anchorScore
+  anchors, anchorScore, calibration
 }: DashboardProps) => {
+  // Bumped after a successful Monday correction submission so the badge + weekly forecast refresh.
+  const [calibrationVersion, setCalibrationVersion] = useState(0);
+
+  // Engine-driven 7-day forecast — replaces the older client-side heuristic numbers.
+  type EngineDay = {
+    date: string;
+    dayName: string;
+    predicted_revenue: number;
+    baseline: number;
+    deltaPct: number;
+    reasons: string[];
+    weather: string;
+    eventsCount: number;
+  };
+  type EngineForecast = {
+    calibrated: boolean;
+    correctionsUsed: number;
+    days: EngineDay[];
+    summary: { totalPredicted: number; totalBaseline: number; weekDeltaPct: number };
+  };
+  const [engineForecast, setEngineForecast] = useState<EngineForecast | null>(null);
+  const [engineLoading, setEngineLoading] = useState(false);
+
+  useEffect(() => {
+    if (!userLatLng || !businessType) return;
+    const baselineRevenue = Number(revenue);
+    if (!Number.isFinite(baselineRevenue) || baselineRevenue <= 0) return;
+
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const startDate = today.toISOString().slice(0, 10);
+    const schoolDependent = SCHOOL_DEPENDENT_BUSINESSES.has(businessType);
+
+    let cancelled = false;
+    setEngineLoading(true);
+    fetch('/api/forecast/week', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        businessType,
+        lat: userLatLng.lat,
+        lng: userLatLng.lng,
+        baselineRevenue,
+        schoolDependent,
+        startDate,
+        days: 7,
+      }),
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`status ${res.status}`))))
+      .then((data: EngineForecast) => {
+        if (!cancelled) setEngineForecast(data);
+      })
+      .catch((err) => {
+        console.error('Engine weekly forecast failed', err);
+        if (!cancelled) setEngineForecast(null);
+      })
+      .finally(() => {
+        if (!cancelled) setEngineLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userLatLng?.lat, userLatLng?.lng, businessType, revenue, calibrationVersion]);
   // Tab & state
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [suggestionsExpanded, setSuggestionsExpanded] = useState(true);
@@ -459,19 +540,26 @@ export const Dashboard = ({
   const [competitorsFetched, setCompetitorsFetched] = useState(false);
   const competitorsFetchingRef = useRef(false);
 
-  // Real Calendarific Data
+  // Public US holiday data (keyless) to avoid exposing private API keys in frontend code.
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   useEffect(() => {
     const fetchHolidays = async () => {
       try {
-        const url = `https://calendarific.com/api/v2/holidays?api_key=VJQiIwJAOmpUpLFcHpIrlSq8njnD3rwO&country=US&year=${new Date().getFullYear()}`;
+        const year = new Date().getFullYear();
+        const url = `https://date.nager.at/api/v3/PublicHolidays/${year}/US`;
         const res = await fetch(url);
         const data = await res.json();
-        if (data?.response?.holidays) {
-          setCalendarEvents(data.response.holidays);
+        if (Array.isArray(data)) {
+          const normalized = data.map((h: any) => ({
+            name: h.name,
+            date: { iso: h.date },
+            type: ['National holiday'],
+            description: `${h.name} may influence local demand.`,
+          }));
+          setCalendarEvents(normalized);
         }
       } catch (e) {
-        console.error('Failed to fetch calendarific', e);
+        console.error('Failed to fetch holiday data', e);
       }
     };
     fetchHolidays();
@@ -528,7 +616,7 @@ export const Dashboard = ({
 
   const getDashboardEventsForDate = (date: string) => dashboardEvents.filter(ev => ev.date === date);
 
-  // Ticketmaster Local Events
+  // Local events are intentionally disabled client-side to avoid shipping private API keys.
   const [ticketmasterEvents, setTicketmasterEvents] = useState<any[]>([]);
   const [ticketmasterLoading, setTicketmasterLoading] = useState(false);
   const [ticketmasterError, setTicketmasterError] = useState('');
@@ -545,99 +633,9 @@ export const Dashboard = ({
     };
 
     const fetchLocalEvents = async () => {
-      setTicketmasterLoading(true);
-      setTicketmasterError('');
-      try {
-        const isGoogleReady = await waitForGoogleMaps();
-        let lat = userLatLng?.lat;
-        let lng = userLatLng?.lng;
-
-        // Prefer lat/lng from onboarding and geocode only when needed.
-        if ((lat == null || lng == null) && isGoogleReady) {
-          const geocoder = new window.google.maps.Geocoder();
-          const geoResult = await new Promise<any>((resolve, reject) => {
-            geocoder.geocode({ address }, (results: any, status: string) => {
-              if (status === 'OK' && results[0]) resolve(results[0]);
-              else reject(new Error(`Geocoding failed: ${status}`));
-            });
-          });
-          lat = geoResult.geometry.location.lat();
-          lng = geoResult.geometry.location.lng();
-        }
-
-        if (lat == null || lng == null) {
-          throw new Error('Could not determine location coordinates for local events.');
-        }
-        
-        const today = new Date();
-        const nextWeek = new Date(today);
-        nextWeek.setDate(nextWeek.getDate() + 7);
-        const startDate = today.toISOString().split('.')[0] + 'Z';
-        const endDate = nextWeek.toISOString().split('.')[0] + 'Z';
-
-        const fetchTicketmasterEvents = async (params: URLSearchParams) => {
-          const res = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${params.toString()}`);
-          if (!res.ok) throw new Error(`Ticketmaster request failed (${res.status})`);
-          const data = await res.json();
-          return data?._embedded?.events || [];
-        };
-
-        // Pass 1: strict local + date range
-        const strictParams = new URLSearchParams({
-          apikey: 'CbWqLGxPJkOnKoYFneIykAlLzOromtCl',
-          latlong: `${lat},${lng}`,
-          radius: '35',
-          unit: 'miles',
-          startDateTime: startDate,
-          endDateTime: endDate,
-          size: '50',
-          sort: 'date,asc',
-        });
-
-        let events = await fetchTicketmasterEvents(strictParams);
-
-        // Pass 2: broader local search without strict date window
-        if (!events.length) {
-          const broadParams = new URLSearchParams({
-            apikey: 'CbWqLGxPJkOnKoYFneIykAlLzOromtCl',
-            latlong: `${lat},${lng}`,
-            radius: '60',
-            unit: 'miles',
-            size: '80',
-            sort: 'date,asc',
-          });
-          events = await fetchTicketmasterEvents(broadParams);
-        }
-
-        // Pass 3: city fallback if geo-based calls return empty
-        if (!events.length) {
-          const city = (address.split(',')[1] || address.split(',')[0] || '').trim();
-          if (city) {
-            const cityParams = new URLSearchParams({
-              apikey: 'CbWqLGxPJkOnKoYFneIykAlLzOromtCl',
-              city,
-              countryCode: 'US',
-              size: '80',
-              sort: 'date,asc',
-            });
-            events = await fetchTicketmasterEvents(cityParams);
-          }
-        }
-
-        if (cancelled) return;
-        setTicketmasterEvents(events);
-        if (!events.length) {
-          setTicketmasterError('No Ticketmaster events returned for your area right now.');
-        }
-      } catch (e: any) {
-        console.error('Ticketmaster fetch failed', e);
-        if (!cancelled) {
-          setTicketmasterEvents([]);
-          setTicketmasterError(e?.message || 'Failed to connect to Ticketmaster API.');
-        }
-      } finally {
-        if (!cancelled) setTicketmasterLoading(false);
-      }
+      setTicketmasterLoading(false);
+      setTicketmasterEvents([]);
+      setTicketmasterError('Live local events are temporarily disabled until a secure server proxy is configured.');
     };
 
     fetchLocalEvents();
@@ -1137,10 +1135,18 @@ export const Dashboard = ({
     };
   };
 
-  // Average week outlook
-  const weekAvg = weatherData.length > 0
+  // Average week outlook — prefer the Kastly engine's Monte Carlo result when available,
+  // fall back to the heuristic when the engine call hasn't returned yet (or failed).
+  const heuristicWeekAvg = weatherData.length > 0
     ? Math.round(weatherData.reduce((sum, d) => sum + parseInt(generateAIForecast(d).pct), 0) / weatherData.length)
     : 0;
+  const weekAvg = engineForecast ? Math.round(engineForecast.summary.weekDeltaPct) : heuristicWeekAvg;
+
+  // Lookup engine deltaPct for a given chart index, with heuristic fallback.
+  const engineDeltaForIndex = (i: number, fallbackPct: number): number => {
+    if (engineForecast?.days[i]) return engineForecast.days[i].deltaPct;
+    return fallbackPct;
+  };
 
   // Today's data
   const todayWeather = weatherData[0];
@@ -1159,11 +1165,16 @@ export const Dashboard = ({
       try {
           const today = new Date();
           const currentYear = today.getFullYear();
-          const res = await fetch(`https://calendarific.com/api/v2/holidays?api_key=VJQiIwJAOmpUpLFcHpIrlSq8njnD3rwO&country=US&year=${currentYear}`);
+          const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${currentYear}/US`);
           const data = await res.json();
           
-          if (data?.response?.holidays) {
-            const allHolidays = data.response.holidays;
+          if (Array.isArray(data)) {
+            const allHolidays = data.map((h: any) => ({
+              name: h.name,
+              date: { iso: h.date },
+              type: ['National holiday'],
+              description: `${h.name} may influence local demand.`,
+            }));
           
           // Filter out past events and select ones that are likely important
           const upcoming = allHolidays.filter((h: any) => {
@@ -1230,7 +1241,7 @@ export const Dashboard = ({
           setApiEvents([...hardcodedEvents, ...formattedEvents]);
         }
       } catch (err) {
-        console.error('Failed to fetch events from Calendarific', err);
+        console.error('Failed to fetch holiday events', err);
       }
     };
     
@@ -1347,13 +1358,33 @@ export const Dashboard = ({
                 <h1 className="text-3xl font-bold text-white font-geist tracking-tight">
                   {businessName ? `Welcome, ${businessName}!` : 'Dashboard'}
                 </h1>
-                <p className="text-white/30 text-sm font-geist mt-0.5">{dateStr}</p>
+                <div className="flex items-center gap-3 mt-0.5">
+                  <p className="text-white/30 text-sm font-geist">{dateStr}</p>
+                  {calibration?.calibrated && (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-geist text-emerald-300 bg-emerald-400/10 border border-emerald-400/30 rounded-full px-2.5 py-0.5">
+                      📈 Calibrated · {calibration.correctionsCount} day{calibration.correctionsCount === 1 ? '' : 's'} (avg {calibration.averageRatio.toFixed(2)})
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="text-white/40 text-sm font-geist">Live</span>
               </div>
             </div>
+
+            {/* Monday morning correction prompt — only renders if last week has no corrections yet */}
+            {userLatLng && businessType && Number(revenue) > 0 && (
+              <WeeklyCheckin
+                key={calibrationVersion}
+                businessType={businessType}
+                lat={userLatLng.lat}
+                lng={userLatLng.lng}
+                baselineRevenue={Number(revenue)}
+                schoolDependent={SCHOOL_DEPENDENT_BUSINESSES.has(businessType)}
+                onSubmitted={() => setCalibrationVersion((v) => v + 1)}
+              />
+            )}
 
             {/* Top 3 metric cards */}
             <div className="grid grid-cols-3 gap-4 mb-6">
@@ -1442,7 +1473,8 @@ export const Dashboard = ({
                       </defs>
                       {(() => {
                         const points = weatherData.map((d, i) => {
-                          const impact = parseInt(generateAIForecast(d).pct);
+                          const heuristic = parseInt(generateAIForecast(d).pct);
+                          const impact = engineDeltaForIndex(i, heuristic);
                           const x = (i / 6) * 580 + 10;
                           const y = 100 - (impact / 30) * 80;
                           return `${x},${y}`;
@@ -1454,7 +1486,8 @@ export const Dashboard = ({
                             <polygon points={areaPoints} fill="url(#lineGrad)" />
                             <polyline points={polyline} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinejoin="round" />
                             {weatherData.map((d, i) => {
-                              const impact = parseInt(generateAIForecast(d).pct);
+                              const heuristic = parseInt(generateAIForecast(d).pct);
+                              const impact = engineDeltaForIndex(i, heuristic);
                               const x = (i / 6) * 580 + 10;
                               const y = 100 - (impact / 30) * 80;
                               return <circle key={i} cx={x} cy={y} r="3" fill="white" opacity="0.6" />;

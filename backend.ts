@@ -20,19 +20,28 @@ dotenv.config({ path: '.env.local' });
 const app = express();
 const PORT = 5001;
 
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176')
+// Allow any localhost / 127.0.0.1 origin in dev — Vite picks whatever port is free
+// (5173, 5174, 5180, etc.) and previously a port outside the hardcoded list silently
+// CORS-rejected every /api call from the browser. Production deploys can lock this
+// down via ALLOWED_ORIGINS env.
+const explicitAllowed = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map((v) => v.trim())
   .filter(Boolean);
+const localhostPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin) {
         callback(null, true);
         return;
       }
-      callback(new Error('Origin not allowed by CORS'));
+      if (explicitAllowed.includes(origin) || localhostPattern.test(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
     methods: ['GET', 'POST'],
     credentials: false,

@@ -19,6 +19,8 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased overflow-x-hidden;
+    background: linear-gradient(155deg, #060b1b 0%, #08112c 38%, #05060a 100%);
+    min-height: 100vh;
   }
 }
 

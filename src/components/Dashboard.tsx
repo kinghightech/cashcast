@@ -5,23 +5,6 @@ import {
   Sparkles, Calendar, ChevronDown, ChevronRight, Megaphone, Target, Video, Briefcase, Plus, Trash2, Edit2,
   Star, Award, Zap, AlertCircle, Building2
 } from 'lucide-react';
-import { WebsiteBeta } from './WebsiteBeta';
-import { WeeklyCheckin } from './WeeklyCheckin';
-
-const SCHOOL_DEPENDENT_BUSINESSES = new Set([
-  'Restaurant', 'Café', 'Bakery', 'Convenience Store', 'Specialty Retail', 'Fitness Studio',
-]);
-
-export type DashboardCalibration = {
-  baselineRevenue: number;
-  schoolDependent: boolean;
-  calibrated: boolean;
-  correctionsCount: number;
-  averageRatio: number;
-  message: string;
-  storedDays: number;
-  skipped: boolean;
-};
 
 // WMO weather codes → icon + label
 const getWeatherInfo = (code: number) => {
@@ -97,7 +80,6 @@ interface DashboardProps {
   businessName?: string;
   anchors: TrafficAnchor[];
   anchorScore: number;
-  calibration?: DashboardCalibration | null;
 }
 
 // ===== COMPETITORS SECTION HELPERS =====
@@ -282,17 +264,154 @@ const glassCard = {
 
 const navItemsDef = [
   { label: 'Dashboard', icon: LayoutDashboard },
-  { 
-    label: 'Suggestions', 
-    icon: Lightbulb,
-    subItems: [
-      { label: 'Checklist', icon: CheckSquare },
-      { label: 'Idea Center', icon: Sparkles },
-      { label: 'For You', icon: Megaphone }
-    ]
+  { label: 'Checklist', icon: CheckSquare },
+  { label: 'Learn', icon: Lightbulb },
+];
+
+const learnIssues = [
+  {
+    title: 'Gas Leaks',
+    risk: 'Fire hazards, shutdowns, and serious safety liability.',
+    teach: 'Gas incidents usually come from tiny undetected leaks, blocked vents, or poor shutoff discipline. The goal is fast detection plus a repeatable emergency response.',
+    steps: [
+      'Install gas detectors in kitchens, boiler rooms, and enclosed utility spaces.',
+      'Create a shutoff protocol and post valve maps where staff can access them fast.',
+      'Book licensed line inspections at least annually and after any remodeling.',
+      'Train all staff to evacuate first, then contact emergency services and the utility provider.'
+    ],
   },
-  { label: 'Competitors', icon: Users2, badge: 'BETA' },
-  { label: 'Website Beta', icon: Building2, badge: 'NEW' },
+  {
+    title: 'Electrical Overload & Outdated Panels',
+    risk: 'Circuit failures, damaged equipment, and avoidable fire risk.',
+    teach: 'Most overload failures happen when growth adds equipment faster than electrical upgrades. A load map and breaker plan prevent surprise outages.',
+    steps: [
+      'Audit panel capacity against your real peak load from HVAC, refrigeration, and POS devices.',
+      'Replace damaged extension-cord setups with dedicated circuits installed by an electrician.',
+      'Label every breaker clearly and keep an emergency reset/check procedure near the panel.',
+      'Schedule thermal scans yearly to catch overheating connections before failure.'
+    ],
+  },
+  {
+    title: 'Plumbing Backups & Water Damage',
+    risk: 'Downtime, mold growth, and expensive restoration work.',
+    teach: 'Plumbing failures are usually progressive, not sudden. Catching small flow or moisture anomalies early saves major repair costs.',
+    steps: [
+      'Set a preventive drain cleaning schedule for high-use sinks and floor drains.',
+      'Install leak sensors near restrooms, water heaters, and refrigeration lines.',
+      'Document emergency shutoff points and assign one person per shift to respond.',
+      'Inspect ceilings/walls monthly for moisture signs and fix minor leaks immediately.'
+    ],
+  },
+  {
+    title: 'HVAC Failure During Peak Hours',
+    risk: 'Customer drop-off, food safety issues, and staff productivity loss.',
+    teach: 'HVAC risk is operational risk. If comfort or temperature control fails during rush hours, revenue and customer retention drop immediately.',
+    steps: [
+      'Track filter changes and preventive maintenance on a fixed monthly/quarterly cadence.',
+      'Keep thermostat zones calibrated so front-of-house and back-of-house stay within safe ranges.',
+      'Maintain an emergency vendor list with guaranteed response windows.',
+      'Set alerts for temperature drift to catch failing equipment before full outage.'
+    ],
+  },
+  {
+    title: 'Fire Code Gaps',
+    risk: 'Fines, forced closure, and high insurance exposure.',
+    teach: 'Fire inspections fail most often from expired extinguishers, blocked exits, and missing drill routines.',
+    steps: [
+      'Inspect extinguisher tags monthly and replace or service on schedule.',
+      'Keep all exits clear and visibly marked at all times, including storage-heavy days.',
+      'Run quarterly evacuation drills with shift leads and document completion.',
+      'Perform a monthly walk-through checklist for alarms, signage, and suppression systems.'
+    ],
+  },
+  {
+    title: 'Food Safety Temperature Violations',
+    risk: 'Spoilage, health violations, and reputation loss.',
+    teach: 'Cold chain failures are one of the most expensive silent losses in food operations.',
+    steps: [
+      'Set opening, mid-shift, and closing temperature checks with required logs.',
+      'Use sensor alerts for walk-ins and freezers to catch overnight drift.',
+      'Create a discard policy for out-of-range products and enforce it every time.',
+      'Train all new hires on safe holding ranges before independent shifts.'
+    ],
+  },
+  {
+    title: 'Roof & Building Envelope Leaks',
+    risk: 'Inventory damage, mold, and recurring repair bills.',
+    teach: 'Envelope leaks worsen fast with weather cycles; preventive checks are far cheaper than emergency remediation.',
+    steps: [
+      'Inspect roof seams and penetrations before rainy seasons and after major storms.',
+      'Seal visible cracks around windows, doors, and utility penetrations.',
+      'Track leak reports in one log so repeat zones are escalated quickly.',
+      'Use a rapid-response vendor contract to avoid long downtime after heavy weather.'
+    ],
+  },
+  {
+    title: 'Security Blind Spots',
+    risk: 'Theft, cash loss, and employee safety incidents.',
+    teach: 'Security is strongest when physical layout, camera coverage, and close-out procedures work as one system.',
+    steps: [
+      'Audit camera blind spots near entrances, cash points, and back-of-house exits.',
+      'Implement dual-control cash close with manager verification.',
+      'Use clear key access policies for utility rooms and inventory storage.',
+      'Run incident reviews monthly and update SOPs for recurring patterns.'
+    ],
+  },
+  {
+    title: 'Pest Infestation Risk',
+    risk: 'Failed inspections, contamination risk, and customer trust damage.',
+    teach: 'Pest control is mostly a sanitation and sealing discipline problem, not a once-a-month spray problem.',
+    steps: [
+      'Set a strict cleaning close-out checklist for crumbs, grease, and standing water.',
+      'Seal entry points around doors, drains, and utility penetrations.',
+      'Store all food and paper goods off the floor in sealed containers.',
+      'Track sightings in one log and escalate recurring zones immediately.'
+    ],
+  },
+  {
+    title: 'Slip and Fall Hazards',
+    risk: 'Injury claims, insurance spikes, and staff downtime.',
+    teach: 'Most slip incidents come from predictable patterns: wet entry zones, poor mats, and delayed cleanup.',
+    steps: [
+      'Use anti-slip mats at all entrances and replace curled or worn mats quickly.',
+      'Create an immediate spill-response rule with accountable shift ownership.',
+      'Install visible wet-floor signage and keep it stocked in every zone.',
+      'Document all incidents with time, location, and corrective action to prevent repeats.'
+    ],
+  },
+  {
+    title: 'Backup and Data Loss',
+    risk: 'Losing customer records, schedules, and operational history.',
+    teach: 'Small businesses lose weeks of productivity from preventable data loss when backups are not tested.',
+    steps: [
+      'Enable automatic daily cloud backups for POS, scheduling, and accounting systems.',
+      'Keep at least one offline backup copy for ransomware resilience.',
+      'Test restore procedures monthly so backups are proven, not assumed.',
+      'Assign one owner to verify backup completion logs every week.'
+    ],
+  },
+  {
+    title: 'Vendor Dependency Failures',
+    risk: 'Stockouts, service outages, and emergency overpaying.',
+    teach: 'Single-vendor dependency turns minor supply chain hiccups into full operational disruptions.',
+    steps: [
+      'List critical items and assign at least one backup supplier for each.',
+      'Define reorder triggers based on lead time, not just low shelf count.',
+      'Pre-negotiate emergency purchasing terms before urgent situations happen.',
+      'Review vendor performance monthly for fill-rate and late-delivery patterns.'
+    ],
+  },
+  {
+    title: 'Staff Safety and Incident Readiness',
+    risk: 'Workplace injuries, poor emergency response, and morale decline.',
+    teach: 'Safety readiness improves when response steps are simple, visible, and practiced repeatedly.',
+    steps: [
+      'Publish role-based emergency actions for openers, closers, and shift leads.',
+      'Run short monthly drills for fire, medical, and utility-failure scenarios.',
+      'Keep first-aid and emergency contacts visible in front and back-of-house.',
+      'Debrief every incident within 24 hours and update SOPs accordingly.'
+    ],
+  },
 ];
 
 interface NewsArticle {
@@ -449,78 +568,19 @@ const getTrendsForBusiness = (type: string) => {
 export const Dashboard = ({
   address, userLatLng, businessType, revenue, profitMargin, businessModel,
   mixedModels, weatherData, weatherLoading, exposure, peakTraffic, customerSource, businessName,
-  anchors, anchorScore, calibration
+  anchors, anchorScore
 }: DashboardProps) => {
-  // Bumped after a successful Monday correction submission so the badge + weekly forecast refresh.
-  const [calibrationVersion, setCalibrationVersion] = useState(0);
-
-  // Engine-driven 7-day forecast — replaces the older client-side heuristic numbers.
-  type EngineDay = {
-    date: string;
-    dayName: string;
-    predicted_revenue: number;
-    baseline: number;
-    deltaPct: number;
-    reasons: string[];
-    weather: string;
-    eventsCount: number;
-  };
-  type EngineForecast = {
-    calibrated: boolean;
-    correctionsUsed: number;
-    days: EngineDay[];
-    summary: { totalPredicted: number; totalBaseline: number; weekDeltaPct: number };
-  };
-  const [engineForecast, setEngineForecast] = useState<EngineForecast | null>(null);
-  const [engineLoading, setEngineLoading] = useState(false);
-
-  useEffect(() => {
-    if (!userLatLng || !businessType) return;
-    const baselineRevenue = Number(revenue);
-    if (!Number.isFinite(baselineRevenue) || baselineRevenue <= 0) return;
-
-    const today = new Date();
-    today.setHours(12, 0, 0, 0);
-    const startDate = today.toISOString().slice(0, 10);
-    const schoolDependent = SCHOOL_DEPENDENT_BUSINESSES.has(businessType);
-
-    let cancelled = false;
-    setEngineLoading(true);
-    fetch('/api/forecast/week', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        businessType,
-        lat: userLatLng.lat,
-        lng: userLatLng.lng,
-        baselineRevenue,
-        schoolDependent,
-        startDate,
-        days: 7,
-      }),
-    })
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`status ${res.status}`))))
-      .then((data: EngineForecast) => {
-        if (!cancelled) setEngineForecast(data);
-      })
-      .catch((err) => {
-        console.error('Engine weekly forecast failed', err);
-        if (!cancelled) setEngineForecast(null);
-      })
-      .finally(() => {
-        if (!cancelled) setEngineLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userLatLng?.lat, userLatLng?.lng, businessType, revenue, calibrationVersion]);
   // Tab & state
   const [activeTab, setActiveTab] = useState('Dashboard');
-  const [suggestionsExpanded, setSuggestionsExpanded] = useState(true);
+  const [selectedLearnIssue, setSelectedLearnIssue] = useState(learnIssues[0].title);
+  const learnDetailRef = useRef<HTMLDivElement | null>(null);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, string>>({});
-  const [trendingDates, setTrendingDates] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (activeTab !== 'Learn') return;
+    learnDetailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [selectedLearnIssue, activeTab]);
 
   // Dynamic Checklist State
   const [checklist, setChecklist] = useState<ChecklistItem[]>([
@@ -540,62 +600,18 @@ export const Dashboard = ({
   const [competitorsFetched, setCompetitorsFetched] = useState(false);
   const competitorsFetchingRef = useRef(false);
 
-  // Public US holiday data (keyless) to avoid exposing private API keys in frontend code.
-  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  // Real Calendarific Data
+  const [calendarEvents] = useState<any[]>([]);
   useEffect(() => {
-    const fetchHolidays = async () => {
-      try {
-        const year = new Date().getFullYear();
-        const url = `https://date.nager.at/api/v3/PublicHolidays/${year}/US`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          const normalized = data.map((h: any) => ({
-            name: h.name,
-            date: { iso: h.date },
-            type: ['National holiday'],
-            description: `${h.name} may influence local demand.`,
-          }));
-          setCalendarEvents(normalized);
-        }
-      } catch (e) {
-        console.error('Failed to fetch holiday data', e);
-      }
-    };
-    fetchHolidays();
+    return;
   }, []);
 
   useEffect(() => {
-    if (!calendarEvents.length) return;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const end = new Date(today);
-    end.setDate(end.getDate() + 14);
-
-    const upcoming = calendarEvents
-      .filter((h: any) => {
-        const d = new Date(h.date?.iso + 'T00:00:00');
-        return d >= today && d <= end && Array.isArray(h.type) && (h.type.includes('National holiday') || h.type.includes('Observance'));
-      })
-      .map((h: any, idx: number) => {
-        const d = new Date(h.date.iso + 'T00:00:00');
-        return {
-          id: `dash_ev_${h.name.replace(/\s+/g, '_').toLowerCase()}_${idx}`,
-          title: h.name,
-          date: h.date.iso,
-          dateLabel: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' }),
-          metric: 'Upcoming Event',
-          insight: h.description?.length > 140 ? `${h.description.slice(0, 137)}...` : (h.description || `${h.name} may influence local demand.`),
-          source: 'calendarific' as const,
-        };
-      })
-      .sort((a: DashboardUpcomingEvent, b: DashboardUpcomingEvent) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    setDashboardEvents(upcoming);
+    return;
   }, [calendarEvents]);
 
   const [showApiInfo, setShowApiInfo] = useState(false);
-  const [dashboardEvents, setDashboardEvents] = useState<DashboardUpcomingEvent[]>([]);
+  const [dashboardEvents] = useState<DashboardUpcomingEvent[]>([]);
 
   // Deterministic 5-10% uplift so logic is predictable and swappable later.
   const calculateProjectedGain = (itemId: string, date: string): number => {
@@ -616,33 +632,15 @@ export const Dashboard = ({
 
   const getDashboardEventsForDate = (date: string) => dashboardEvents.filter(ev => ev.date === date);
 
-  // Local events are intentionally disabled client-side to avoid shipping private API keys.
+  // Ticketmaster Local Events
   const [ticketmasterEvents, setTicketmasterEvents] = useState<any[]>([]);
   const [ticketmasterLoading, setTicketmasterLoading] = useState(false);
   const [ticketmasterError, setTicketmasterError] = useState('');
   useEffect(() => {
-    let cancelled = false;
-
-    const waitForGoogleMaps = async (maxWaitMs = 10000, intervalMs = 200) => {
-      const started = Date.now();
-      while (Date.now() - started < maxWaitMs) {
-        if (window.google?.maps?.Geocoder) return true;
-        await new Promise(resolve => setTimeout(resolve, intervalMs));
-      }
-      return false;
-    };
-
-    const fetchLocalEvents = async () => {
-      setTicketmasterLoading(false);
-      setTicketmasterEvents([]);
-      setTicketmasterError('Live local events are temporarily disabled until a secure server proxy is configured.');
-    };
-
-    fetchLocalEvents();
-
-    return () => {
-      cancelled = true;
-    };
+    setTicketmasterEvents([]);
+    setTicketmasterLoading(false);
+    setTicketmasterError('');
+    return;
   }, [address, userLatLng?.lat, userLatLng?.lng]);
 
   // Competitors Fetch — triggers once when Competitors tab is first opened
@@ -1027,8 +1025,8 @@ export const Dashboard = ({
     const checklistAdj = getChecklistGainForDate(day.date) / 100;
     totalImpact += checklistAdj;
 
-    // T: manual trending boost
-    const trendAdj = trendingDates[day.date] ? 0.10 : 0;
+    // T: trending boost disabled for now
+    const trendAdj = 0;
     totalImpact += trendAdj;
 
     // 4. EVENT CAPITALIZATION
@@ -1135,18 +1133,10 @@ export const Dashboard = ({
     };
   };
 
-  // Average week outlook — prefer the Kastly engine's Monte Carlo result when available,
-  // fall back to the heuristic when the engine call hasn't returned yet (or failed).
-  const heuristicWeekAvg = weatherData.length > 0
+  // Average week outlook
+  const weekAvg = weatherData.length > 0
     ? Math.round(weatherData.reduce((sum, d) => sum + parseInt(generateAIForecast(d).pct), 0) / weatherData.length)
     : 0;
-  const weekAvg = engineForecast ? Math.round(engineForecast.summary.weekDeltaPct) : heuristicWeekAvg;
-
-  // Lookup engine deltaPct for a given chart index, with heuristic fallback.
-  const engineDeltaForIndex = (i: number, fallbackPct: number): number => {
-    if (engineForecast?.days[i]) return engineForecast.days[i].deltaPct;
-    return fallbackPct;
-  };
 
   // Today's data
   const todayWeather = weatherData[0];
@@ -1165,16 +1155,11 @@ export const Dashboard = ({
       try {
           const today = new Date();
           const currentYear = today.getFullYear();
-          const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${currentYear}/US`);
+          const res = await fetch(`https://calendarific.com/api/v2/holidays?api_key=VJQiIwJAOmpUpLFcHpIrlSq8njnD3rwO&country=US&year=${currentYear}`);
           const data = await res.json();
           
-          if (Array.isArray(data)) {
-            const allHolidays = data.map((h: any) => ({
-              name: h.name,
-              date: { iso: h.date },
-              type: ['National holiday'],
-              description: `${h.name} may influence local demand.`,
-            }));
+          if (data?.response?.holidays) {
+            const allHolidays = data.response.holidays;
           
           // Filter out past events and select ones that are likely important
           const upcoming = allHolidays.filter((h: any) => {
@@ -1241,7 +1226,7 @@ export const Dashboard = ({
           setApiEvents([...hardcodedEvents, ...formattedEvents]);
         }
       } catch (err) {
-        console.error('Failed to fetch holiday events', err);
+        console.error('Failed to fetch events from Calendarific', err);
       }
     };
     
@@ -1252,10 +1237,7 @@ export const Dashboard = ({
     <div
       className="h-screen flex overflow-hidden"
       style={{
-        backgroundImage: 'url(/onboarding2.png)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundColor: '#050505',
+        background: 'linear-gradient(155deg, #060b1b 0%, #08112c 38%, #05060a 100%)',
       }}
     >
       {/* ===== LEFT SIDEBAR ===== */}
@@ -1269,12 +1251,8 @@ export const Dashboard = ({
         }}
       >
         {/* Brand */}
-        <div className="flex items-center gap-3 px-2 mb-6 pt-2">
-          <img src="/logo.png" alt="CashCast" className="h-8 w-auto object-contain mix-blend-screen opacity-90" />
-          <div>
-            <p className="text-white text-sm font-bold font-geist tracking-tight">CashCast</p>
-            <p className="text-white/30 text-[10px] font-geist">Business Intel</p>
-          </div>
+        <div className="flex items-center px-2 mb-6 pt-2">
+          <p className="text-white text-sm font-bold font-geist tracking-tight">Haven</p>
         </div>
 
         {/* Business info */}
@@ -1286,55 +1264,21 @@ export const Dashboard = ({
         {/* Navigation */}
         <nav className="flex flex-col gap-1 mb-5 flex-1">
           {navItemsDef.map((item) => {
-            const hasSub = !!item.subItems;
-            const isSuggestions = item.label === 'Suggestions';
-            const isActiveParent = hasSub && item.subItems?.map(s => s.label).includes(activeTab);
             const isDirectlyActive = activeTab === item.label;
 
             return (
               <div key={item.label} className="flex flex-col gap-1">
                 <button
-                  onClick={() => {
-                    if (hasSub) setSuggestionsExpanded(!suggestionsExpanded);
-                    else setActiveTab(item.label);
-                  }}
+                  onClick={() => setActiveTab(item.label)}
                   className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium font-geist transition-all duration-200 cursor-pointer ${
-                    (isDirectlyActive || isActiveParent)
+                    isDirectlyActive
                       ? 'bg-white/10 text-white shadow-[0_0_15px_rgba(255,255,255,0.05)]'
                       : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
                   }`}
                 >
                   <item.icon className="w-4 h-4" />
                   <span>{item.label}</span>
-                  {item.badge && (
-                    <span className="text-[9px] bg-white/10 text-white/50 px-1.5 py-0.5 rounded-full font-geist ml-auto">{item.badge}</span>
-                  )}
-                  {hasSub && (
-                    <div className="ml-auto flex items-center justify-center w-5 h-5 rounded hover:bg-white/10 transition-colors">
-                      {suggestionsExpanded ? <ChevronDown className="w-3.5 h-3.5 text-white/40" /> : <ChevronRight className="w-3.5 h-3.5 text-white/40" />}
-                    </div>
-                  )}
                 </button>
-
-                {/* Sub-items dropdown */}
-                {hasSub && suggestionsExpanded && (
-                  <div className="flex flex-col gap-1 pl-9 mt-1 mb-2">
-                    {item.subItems?.map((sub) => (
-                      <button
-                        key={sub.label}
-                        onClick={() => setActiveTab(sub.label)}
-                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium font-geist transition-all duration-200 cursor-pointer ${
-                          activeTab === sub.label
-                            ? 'text-emerald-400 bg-emerald-400/5'
-                            : 'text-white/30 hover:text-white/60 hover:bg-white/[0.02]'
-                        }`}
-                      >
-                        <sub.icon className="w-3.5 h-3.5" />
-                        <span>{sub.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
             );
           })}
@@ -1350,7 +1294,7 @@ export const Dashboard = ({
       {/* ===== MAIN CONTENT ===== */}
       <main className="flex-1 p-8 overflow-y-auto">
         {/* ===== TAB CONTENT ===== */}
-        {activeTab === 'Dashboard' ? (
+        {activeTab === 'Dashboard' && (
           <>
             {/* Top bar */}
             <div className="flex items-center justify-between mb-8">
@@ -1358,33 +1302,13 @@ export const Dashboard = ({
                 <h1 className="text-3xl font-bold text-white font-geist tracking-tight">
                   {businessName ? `Welcome, ${businessName}!` : 'Dashboard'}
                 </h1>
-                <div className="flex items-center gap-3 mt-0.5">
-                  <p className="text-white/30 text-sm font-geist">{dateStr}</p>
-                  {calibration?.calibrated && (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-geist text-emerald-300 bg-emerald-400/10 border border-emerald-400/30 rounded-full px-2.5 py-0.5">
-                      📈 Calibrated · {calibration.correctionsCount} day{calibration.correctionsCount === 1 ? '' : 's'} (avg {calibration.averageRatio.toFixed(2)})
-                    </span>
-                  )}
-                </div>
+                <p className="text-white/30 text-sm font-geist mt-0.5">{dateStr}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="text-white/40 text-sm font-geist">Live</span>
               </div>
             </div>
-
-            {/* Monday morning correction prompt — only renders if last week has no corrections yet */}
-            {userLatLng && businessType && Number(revenue) > 0 && (
-              <WeeklyCheckin
-                key={calibrationVersion}
-                businessType={businessType}
-                lat={userLatLng.lat}
-                lng={userLatLng.lng}
-                baselineRevenue={Number(revenue)}
-                schoolDependent={SCHOOL_DEPENDENT_BUSINESSES.has(businessType)}
-                onSubmitted={() => setCalibrationVersion((v) => v + 1)}
-              />
-            )}
 
             {/* Top 3 metric cards */}
             <div className="grid grid-cols-3 gap-4 mb-6">
@@ -1473,8 +1397,7 @@ export const Dashboard = ({
                       </defs>
                       {(() => {
                         const points = weatherData.map((d, i) => {
-                          const heuristic = parseInt(generateAIForecast(d).pct);
-                          const impact = engineDeltaForIndex(i, heuristic);
+                          const impact = parseInt(generateAIForecast(d).pct);
                           const x = (i / 6) * 580 + 10;
                           const y = 100 - (impact / 30) * 80;
                           return `${x},${y}`;
@@ -1486,8 +1409,7 @@ export const Dashboard = ({
                             <polygon points={areaPoints} fill="url(#lineGrad)" />
                             <polyline points={polyline} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinejoin="round" />
                             {weatherData.map((d, i) => {
-                              const heuristic = parseInt(generateAIForecast(d).pct);
-                              const impact = engineDeltaForIndex(i, heuristic);
+                              const impact = parseInt(generateAIForecast(d).pct);
                               const x = (i / 6) * 580 + 10;
                               const y = 100 - (impact / 30) * 80;
                               return <circle key={i} cx={x} cy={y} r="3" fill="white" opacity="0.6" />;
@@ -1592,33 +1514,10 @@ export const Dashboard = ({
                   {/* Right: AI Breakdown */}
                   <div className="flex-1 w-full flex flex-col gap-4">
 
-                    {/* Manual trend boost toggle (+10%) */}
-                    {weatherData[selectedDayIndex] && (
-                      <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-400/20 flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-white/80 text-xs font-geist font-semibold">Mark Day As Trending</p>
-                          <p className="text-white/40 text-[11px] font-geist">Adds +10% trend boost to this day forecast.</p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            const dayKey = weatherData[selectedDayIndex].date;
-                            setTrendingDates(prev => ({ ...prev, [dayKey]: !prev[dayKey] }));
-                          }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
-                            trendingDates[weatherData[selectedDayIndex].date]
-                              ? 'bg-indigo-400/20 text-indigo-200 border-indigo-300/40'
-                              : 'bg-white/5 text-white/60 border-white/15 hover:bg-white/10'
-                          }`}
-                        >
-                          {trendingDates[weatherData[selectedDayIndex].date] ? 'Trending On (+10%)' : 'Enable Trend +10%'}
-                        </button>
-                      </div>
-                    )}
-                    
                     {/* Top Insight & Action Item from AI */}
                     <div className="p-5 rounded-2xl bg-white/5 border border-white/10 mb-2">
                        <h3 className="text-white font-bold font-geist flex items-center gap-2 mb-3">
-                         <Sparkles className="w-4 h-4 text-purple-400" /> CashCast AI Intelligence
+                         <Sparkles className="w-4 h-4 text-purple-400" /> Forecast Breakdown
                        </h3>
                        <div className="flex flex-col gap-3">
                          <div className="flex items-start gap-3">
@@ -1761,36 +1660,6 @@ export const Dashboard = ({
                       );
                     })()}
 
-                    {/* Dynamic Event Driver (Calendarific Holidays) */}
-                    {(() => {
-                      const selectedDate = weatherData[selectedDayIndex]?.date;
-                      const eventsToday = calendarEvents
-                        .filter(e => e.date.iso === selectedDate)
-                        .filter(e => isBigEvent(e.name))
-                        .sort((a, b) => (getEventMatch(b.name)?.importance || 0) - (getEventMatch(a.name)?.importance || 0));
-                      
-                      if (eventsToday.length === 0) return null;
-                      const ev = eventsToday[0]; // Only the biggest
-                      const suggestion = getEventSuggestion(ev.name, businessType || '');
-                      
-                      return (
-                        <div className="flex items-start gap-4 p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.15)] transition-colors">
-                          <div className="w-10 h-10 rounded-full bg-purple-400/20 border border-purple-400/30 flex items-center justify-center shrink-0">
-                            <Calendar className="w-5 h-5 text-purple-400" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex justify-between items-start mb-1">
-                              <h4 className="text-sm font-bold text-white font-geist">{ev.name}</h4>
-                              <span className="text-purple-400 text-sm font-bold font-geist">Event Day</span>
-                            </div>
-                            <p className="text-white/70 text-xs font-geist leading-relaxed mb-2">
-                              {suggestion}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
                     {/* Assigned Checklist Actions (manual flow) */}
                     {(() => {
                       const selectedDate = weatherData[selectedDayIndex]?.date;
@@ -1825,35 +1694,6 @@ export const Dashboard = ({
                       );
                     })()}
 
-                    {/* Upcoming API Events (direct flow) */}
-                    {(() => {
-                      const selectedDate = weatherData[selectedDayIndex]?.date;
-                      const dayApiEvents = selectedDate ? getDashboardEventsForDate(selectedDate) : [];
-                      if (!dayApiEvents.length) return null;
-
-                      return (
-                        <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-400/20">
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="text-sm font-bold text-white font-geist">Upcoming US Events (API)</h4>
-                            <span className="text-indigo-300 text-[11px] font-bold font-geist uppercase tracking-wider">Direct Import</span>
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            {dayApiEvents.map(ev => (
-                              <div key={ev.id} className="rounded-lg px-3 py-2 bg-black/20 border border-white/5">
-                                <div className="flex items-center justify-between gap-3">
-                                  <p className="text-white/85 text-xs font-geist font-semibold">{ev.title}</p>
-                                  <span className="text-[10px] text-indigo-200 font-geist">{ev.dateLabel}</span>
-                                </div>
-                                <p className="text-white/45 text-[11px] font-geist mt-0.5">{ev.insight}</p>
-                                <span className="inline-block mt-1 text-[10px] uppercase tracking-wider text-indigo-300 bg-indigo-500/10 border border-indigo-400/20 px-1.5 py-0.5 rounded">
-                                  API Event
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
 
 
                   </div>
@@ -1861,7 +1701,8 @@ export const Dashboard = ({
               </div>
             )}
           </>
-        ) : activeTab === 'Checklist' ? (
+        )}
+        {activeTab === 'Checklist' && (
           <div className="max-w-4xl mx-auto w-full pb-10">
             <div className="flex justify-between items-center mb-8">
               <h1 className="text-3xl font-bold text-white font-geist tracking-tight">Business Setup Checklist</h1>
@@ -1974,7 +1815,8 @@ export const Dashboard = ({
               ))}
             </div>
           </div>
-        ) : activeTab === 'Idea Center' ? (
+        )}
+        {activeTab === 'Idea Center' && (
           <div className="max-w-5xl mx-auto w-full pb-10">
             <div className="flex justify-between items-center mb-8">
               <h1 className="text-3xl font-bold text-white font-geist tracking-tight">Viral Market Events & Trends</h1>
@@ -2090,7 +1932,8 @@ export const Dashboard = ({
               </div>
             </div>
           </div>
-        ) : activeTab === 'For You' ? (
+        )}
+        {activeTab === 'For You' && (
           <div className="h-full flex flex-col relative rounded-3xl overflow-hidden bg-black border border-white/10" style={{ boxShadow: 'inset 0 0 100px rgba(100, 50, 255, 0.1)' }}>
             {/* Space background elements */}
             <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-40 mix-blend-screen" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(120, 80, 255, 0.4) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(52, 211, 153, 0.15) 0%, transparent 40%)' }} />
@@ -2271,7 +2114,8 @@ export const Dashboard = ({
               </div>
             </div>
           </div>
-        ) : activeTab === 'Competitors' ? (
+        )}
+        {activeTab === 'Competitors' && (
           <div className="max-w-5xl mx-auto w-full pb-10">
 
             {/* Header */}
@@ -2559,20 +2403,62 @@ export const Dashboard = ({
             })()}
 
           </div>
-        ) : activeTab === 'Website Beta' ? (
-          <WebsiteBeta 
-            businessName={businessName}
-            businessType={businessType}
-            address={address}
-          />
-        ) : (
+        )}
+        {activeTab === 'Learn' && (
+          <div className="max-w-5xl mx-auto w-full pb-10">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-white font-geist tracking-tight">Learn</h1>
+              <p className="text-white/45 text-sm font-geist mt-1">
+                Click any issue to open a focused playbook with practical steps for your business.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+              {learnIssues.map((issue) => (
+                <button
+                  key={issue.title}
+                  onClick={() => setSelectedLearnIssue(issue.title)}
+                  className={`rounded-2xl p-5 text-left transition-all border ${selectedLearnIssue === issue.title ? 'border-blue-300/40 bg-blue-500/10' : 'border-white/10 bg-white/[0.02] hover:bg-white/[0.05]'}`}
+                >
+                  <h3 className="text-lg font-bold text-white font-geist">{issue.title}</h3>
+                  <p className="text-sm text-amber-300/90 mt-1 font-geist">{issue.risk}</p>
+                  <p className="text-xs text-white/55 mt-3 font-geist">Tap to learn this playbook</p>
+                </button>
+              ))}
+            </div>
+            {(() => {
+              const selected = learnIssues.find((issue) => issue.title === selectedLearnIssue);
+              if (!selected) return null;
+              return (
+                <div ref={learnDetailRef} className="rounded-2xl p-6" style={glassCard}>
+                  <h2 className="text-2xl font-bold text-white font-geist">{selected.title}</h2>
+                  <p className="text-white/75 text-sm mt-2 font-geist leading-relaxed">{selected.teach}</p>
+                  <div className="mt-5">
+                    <h3 className="text-sm uppercase tracking-wider text-white/50 font-geist mb-3">Step-by-step fix</h3>
+                    <div className="space-y-2.5">
+                      {selected.steps.map((step, index) => (
+                        <div key={step} className="flex items-start gap-2.5">
+                          <span className="w-5 h-5 mt-0.5 rounded-full bg-blue-500/20 border border-blue-300/30 text-blue-200 text-[11px] flex items-center justify-center font-semibold font-geist">
+                            {index + 1}
+                          </span>
+                          <p className="text-sm text-white/85 font-geist leading-relaxed">{step}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+        {activeTab !== 'Dashboard' && activeTab !== 'Checklist' && activeTab !== 'Learn' && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <h2 className="text-2xl font-bold text-white/50 font-geist">{activeTab}</h2>
               <p className="text-white/30 mt-2 font-geist">Coming soon</p>
             </div>
           </div>
-        )}
+        )
+        }
 
       </main>
 

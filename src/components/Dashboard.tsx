@@ -1175,14 +1175,14 @@ export const Dashboard = ({
           const uniqueUpcoming = Array.from(new Map(upcoming.map((h: any) => [h.name, h])).values());
           uniqueUpcoming.sort((a: any, b: any) => new Date(a.date.iso).getTime() - new Date(b.date.iso).getTime());
           
-          // We only want the next 4 events
-          const nextFour = uniqueUpcoming.slice(0, 4);
+          // We want to show all upcoming events
+          const allUpcomingEvents = uniqueUpcoming;
           
           const isFood = businessType?.toLowerCase().includes('food') || businessType?.toLowerCase().includes('restaurant');
           const isRetail = businessType?.toLowerCase().includes('retail') || businessType?.toLowerCase().includes('clothing');
           const isBeauty = businessType?.toLowerCase().includes('beauty') || businessType?.toLowerCase().includes('salon');
 
-          const formattedEvents = nextFour.map((h: any, i) => {
+          const formattedEvents = allUpcomingEvents.map((h: any, i) => {
             const dateObj = new Date(h.date.iso);
             const dateStr = dateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
             
@@ -1200,34 +1200,96 @@ export const Dashboard = ({
               date: dateStr,
               insight,
               action,
-              metric: 'Upcoming Holiday'
+              metric: 'Upcoming Holiday',
+              sortDate: dateObj.getTime()
             };
           });
 
-          const hardcodedEvents = [
+          const currentMonth = today.getMonth();
+
+          const allHardcodedEvents = [
             {
               id: 'hc_1',
+              title: '🏈 Super Bowl',
+              month: 1, // February
+              date: 'Early February',
+              insight: 'Massive day for food delivery and group gatherings.',
+              action: isFood 
+                ? 'Offer a "Big Game" catering bundle.' 
+                : 'Run a pre-game flash sale.',
+              metric: 'High Engagement',
+              sortDate: new Date(currentYear, 1, 10).getTime()
+            },
+            {
+              id: 'hc_2',
               title: '🏀 March Madness',
+              month: 2, // March
               date: 'Late March - April',
               insight: 'College basketball tournament generates massive excitement and group viewings.',
               action: isFood 
                 ? 'Host a bracket challenge and offer 15% off wings or pizza combos on game days.' 
                 : 'Run a "Madness Sale" offering a tiered discount based on tournament rounds.',
-              metric: 'High Engagement'
+              metric: 'High Engagement',
+              sortDate: new Date(currentYear, 2, 20).getTime()
             },
             {
-              id: 'hc_2',
+              id: 'hc_3',
               title: '💐 Mother\'s Day Weekend',
+              month: 4, // May
               date: 'Second Sunday in May',
               insight: 'One of the highest grossing local spending weekends of the entire year.',
               action: isBeauty 
                 ? 'Pre-sell "Mom & Me" spa day gift cards starting in mid-April.' 
                 : 'Bundle top-selling items into ready-to-go gift baskets right at the register.',
-              metric: 'Huge Gifting Spike'
+              metric: 'Huge Gifting Spike',
+              sortDate: new Date(currentYear, 4, 10).getTime()
+            },
+            {
+              id: 'hc_4',
+              title: '🎃 Halloween',
+              month: 9, // October
+              date: 'October 31',
+              insight: 'Major consumer spending holiday for costumes, candy, and parties.',
+              action: isFood 
+                ? 'Offer "Spooky Specials" or themed menu items.' 
+                : 'Host a costume contest for a discount.',
+              metric: 'High Engagement',
+              sortDate: new Date(currentYear, 9, 31).getTime()
+            },
+            {
+              id: 'hc_5',
+              title: '🛍️ Black Friday / Cyber Monday',
+              month: 10, // November
+              date: 'Late November',
+              insight: 'The biggest shopping weekend of the year.',
+              action: isRetail 
+                ? 'Offer your steepest discounts and doorbuster deals.' 
+                : 'Run a gift card promotion.',
+              metric: 'Massive Sales Spike',
+              sortDate: new Date(currentYear, 10, 25).getTime()
+            },
+            {
+              id: 'hc_6',
+              title: '🎄 Holiday Season',
+              month: 11, // December
+              date: 'December',
+              insight: 'Peak shopping and dining out season.',
+              action: isRetail 
+                ? 'Offer gift wrapping and last-minute gift ideas.' 
+                : 'Promote holiday party catering or gift cards.',
+              metric: 'Peak Revenue',
+              sortDate: new Date(currentYear, 11, 15).getTime()
             }
           ];
+
+          const upcomingHardcoded = allHardcodedEvents
+            .filter(e => e.month >= currentMonth)
+            .map(({ month, ...rest }) => rest);
           
-          setApiEvents([...hardcodedEvents, ...formattedEvents]);
+          const combinedEvents = [...upcomingHardcoded, ...formattedEvents]
+            .sort((a, b) => a.sortDate - b.sortDate);
+            
+          setApiEvents(combinedEvents);
         }
       } catch (err) {
         console.error('Failed to fetch events from Calendarific', err);
